@@ -161,8 +161,8 @@ func (e *EmployeeDatabaseTool) Call(ctx context.Context, query string) (string, 
 
 // 从薪水信息中提取数值
 func extractSalaryAmount(salaryInfo string) float64 {
-	// 使用正则表达式提取包含 Salary 的部分
-	salaryRe := regexp.MustCompile(`Salary: \$(\d+)k`)
+	// 使用正则表达式提取包含 Salary 的部分，同时支持大小写的 k/K
+	salaryRe := regexp.MustCompile(`Salary: \$(\d+)[kK]`)
 	matches := salaryRe.FindStringSubmatch(salaryInfo)
 	if len(matches) < 2 {
 		log.Printf("无法从信息中提取薪水: %s", salaryInfo)
@@ -176,7 +176,7 @@ func extractSalaryAmount(salaryInfo string) float64 {
 		return 0
 	}
 
-	// 将 k 转换为实际数值（乘以 1000）
+	// 将 k/K 转换为实际数值（乘以 1000）
 	return base * 1000
 }
 
@@ -276,10 +276,10 @@ func main() {
 
 	// 测试问题
 	questions := []string{
-		"计算2 + 3的值",   // 简单问题
-		"libai的薪水是多少", // 简单问题
-		// "比较 libai 和 sunshangxiang 的薪水差异", // 复杂问题
-		"如果 libai 每月存一半工资，一年能存多少钱？", // 复杂问题
+		"计算2 + 3的值",                      // 简单问题
+		"libai的薪水是多少",                    // 简单问题
+		"比较 libai 和 sunshangxiang 的薪水差异", // 复杂问题
+		"如果 libai 每月存一半工资，一年能存多少钱？",      // 复杂问题
 	}
 
 	for _, question := range questions {
@@ -362,16 +362,27 @@ func handleComparisonQuestion(ctx context.Context, question string, toolSelector
 	if err != nil {
 		return "", fmt.Errorf("查询libai薪水失败: %w", err)
 	}
+	fmt.Printf("libai薪水信息: %s\n", libaiInfo)
 
 	// 2. 查询第二个员工的薪水
 	sunshangxiangInfo, err := employeeTool.Call(ctx, "sunshangxiang的薪水")
 	if err != nil {
 		return "", fmt.Errorf("查询sunshangxiang薪水失败: %w", err)
 	}
+	fmt.Printf("sunshangxiang薪水信息: %s\n", sunshangxiangInfo)
 
 	// 3. 提取薪水数值
 	libaiSalary := extractSalaryAmount(libaiInfo)
+	if libaiSalary == 0 {
+		return "", fmt.Errorf("无法提取libai的薪水数值")
+	}
+
 	sunshangxiangSalary := extractSalaryAmount(sunshangxiangInfo)
+	if sunshangxiangSalary == 0 {
+		return "", fmt.Errorf("无法提取sunshangxiang的薪水数值")
+	}
+
+	fmt.Printf("提取的薪水数值 - libai: %.2f, sunshangxiang: %.2f\n", libaiSalary, sunshangxiangSalary)
 
 	// 4. 计算差异
 	calculatorTool := &CalculatorTool{}
@@ -381,7 +392,7 @@ func handleComparisonQuestion(ctx context.Context, question string, toolSelector
 		if err != nil {
 			return "", fmt.Errorf("计算差异失败: %w", err)
 		}
-		return fmt.Sprintf("libai的薪水比sunshangxiang高 %s", result), nil
+		return fmt.Sprintf("libai的薪水比sunshangxiang低 %s", result), nil
 	} else {
 		diffQuery := fmt.Sprintf("%.0f-%.0f", sunshangxiangSalary, libaiSalary)
 		result, err := calculatorTool.Call(ctx, diffQuery)
